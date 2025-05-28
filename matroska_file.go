@@ -7,18 +7,20 @@ import (
 )
 
 type MatroskaFile struct {
-	Duration       float64
-	File           *os.File
-	FilePosition   int64
-	FrameRate      float64
-	IsValid        bool
-	Path           string
-	PixelHeight    int
-	PixelWidth     int
-	SegmentElement *Element
-	TimeCodeScale  int64
-	Tracks         []*MatroskaTrackInfo
-	VideoCodecId   string
+	Duration          float64
+	File              *os.File
+	FilePosition      int64
+	FileSize          int64
+	FrameRate         float64
+	IsValid           bool
+	MatroskaSubtitles []*MatroskaSubtitle
+	Path              string
+	PixelHeight       int
+	PixelWidth        int
+	SegmentElement    *Element
+	TimeCodeScale     int64
+	Tracks            []*MatroskaTrackInfo
+	VideoCodecId      string
 }
 
 func (m *MatroskaFile) offsetFilePosition(offset int) {
@@ -70,6 +72,14 @@ func NewMatroskaFile(path string) (*MatroskaFile, error) {
 		}
 
 		if segmentElement != nil && segmentElement.Id == ElementSegment {
+			stat, statErr := file.Stat()
+			if statErr != nil {
+				defer matroskaFile.Close()
+
+				return nil, fmt.Errorf("failed to get Matroska file info: %w", statErr)
+			}
+
+			matroskaFile.FileSize = stat.Size()
 			matroskaFile.IsValid = true
 			matroskaFile.SegmentElement = segmentElement
 
@@ -84,4 +94,17 @@ func NewMatroskaFile(path string) (*MatroskaFile, error) {
 
 func (m *MatroskaFile) String() string {
 	return fmt.Sprintf("Duration: %v , FrameRate: %v", m.Duration, m.FrameRate)
+}
+
+func (m *MatroskaFile) Subtitles(trackNumber uint64, progressCallback func(int64, int64)) ([]*MatroskaSubtitle, error) {
+	m.MatroskaSubtitles = nil
+
+	matroskaFileOptions := &MatroskaFileOptions{SubtitleTrack: trackNumber}
+
+	readSegmentClusterErr := m.readSegmentCluster(matroskaFileOptions, progressCallback)
+	if readSegmentClusterErr != nil {
+		return nil, fmt.Errorf("failed to read subtitles: %w", readSegmentClusterErr)
+	}
+
+	return m.MatroskaSubtitles, nil
 }

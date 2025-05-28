@@ -2,12 +2,111 @@ package gse
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 
 	"golang.org/x/sys/cpu"
 )
+
+func (m *MatroskaFile) readBlockGroupElement(clusterElement *Element, clusterTimeCode int64, options *MatroskaFileOptions) error {
+	var element *Element = &Element{}
+	var elementErr error
+	var subtitle *MatroskaSubtitle
+	var subtitleErr error
+
+	for m.FilePosition < clusterElement.EndPosition() && element != nil {
+		element, elementErr = m.readElement()
+		if elementErr != nil {
+			return fmt.Errorf("failed to read cluster element: %w", elementErr)
+		}
+
+		if element == nil {
+			return nil
+		}
+
+		switch element.Id {
+		case ElementBlock:
+			subtitle, subtitleErr = m.readSubtitleBlock(element, clusterTimeCode, options)
+			if subtitleErr != nil {
+				return fmt.Errorf("failed to read subtitle block: %w", subtitleErr)
+			}
+
+			if subtitle != nil {
+				m.MatroskaSubtitles = append(m.MatroskaSubtitles, subtitle)
+			}
+		case ElementBlockDuration:
+			duration, durationErr := m.readUInt(int(element.DataSize))
+			if durationErr != nil {
+				return fmt.Errorf("failed to read block duration element: %w", durationErr)
+			}
+
+			if subtitle != nil {
+				subtitle.Duration = int64(math.Round(m.scaleTime64(float64(duration))))
+			}
+		default:
+			newOffset, seekErr := m.File.Seek(element.DataSize, io.SeekCurrent)
+			if seekErr != nil {
+				return fmt.Errorf("failed to seek while reading block group element: %w", seekErr)
+			}
+
+			m.FilePosition = newOffset
+		}
+	}
+
+	return nil
+}
+
+func (m *MatroskaFile) readCluster(clusterElement *Element, options *MatroskaFileOptions) error {
+	clusterTimeCode := int64(0)
+	var element *Element = &Element{}
+	var elementErr error
+
+	for m.FilePosition < clusterElement.EndPosition() && element != nil {
+		element, elementErr = m.readElement()
+		if elementErr != nil {
+			return fmt.Errorf("failed to read cluster element: %w", elementErr)
+		}
+
+		if element == nil {
+			return nil
+		}
+
+		switch element.Id {
+		case ElementTimecode:
+			ctc, clusterTimeCodeErr := m.readUInt(int(element.DataSize))
+			if clusterTimeCodeErr != nil {
+				return fmt.Errorf("failed to read cluster time code: %w", clusterTimeCodeErr)
+			}
+
+			clusterTimeCode = int64(ctc)
+		case ElementBlockGroup:
+			blockGroupElementErr := m.readBlockGroupElement(element, clusterTimeCode, options)
+			if blockGroupElementErr != nil {
+				return fmt.Errorf("failed to read block group element: %w", blockGroupElementErr)
+			}
+		case ElementSimpleBlock:
+			subtitle, subtitleErr := m.readSubtitleBlock(element, clusterTimeCode, options)
+			if subtitleErr != nil {
+				return fmt.Errorf("failed to read subtitle block: %w", subtitleErr)
+			}
+
+			if subtitle != nil {
+				m.MatroskaSubtitles = append(m.MatroskaSubtitles, subtitle)
+			}
+		default:
+			newOffset, seekErr := m.File.Seek(element.DataSize, io.SeekCurrent)
+			if seekErr != nil {
+				return fmt.Errorf("failed to seek while reading cluster: %w", seekErr)
+			}
+
+			m.FilePosition = newOffset
+		}
+	}
+
+	return nil
+}
 
 func (m *MatroskaFile) readContentEncodingElement(contentEncodingElement *Element) (int, int, uint, error) {
 	contentCompressionAlgorithm, contentEncodingType, contentEncodingScope := 0, 0, uint(0)
@@ -144,6 +243,18 @@ func (m *MatroskaFile) readFloat64() (float64, error) {
 	return math.Float64frombits(bits), nil
 }
 
+func (m *MatroskaFile) readInt16() (int16, error) {
+	data := make([]byte, 2)
+	bytesRead, readErr := m.File.Read(data)
+	if bytesRead == 0 || (readErr != nil && readErr != io.EOF) {
+		return 0, fmt.Errorf("failed to read 16-bit integer from Matroska file: %w", readErr)
+	}
+
+	m.offsetFilePosition(bytesRead)
+
+	return int16(data[0]<<8 | data[1]), nil
+}
+
 func (m *MatroskaFile) readInfoElement(tracksElement *Element) error {
 	var element *Element = &Element{}
 	var elementErr error
@@ -193,8 +304,78 @@ func (m *MatroskaFile) readInfoElement(tracksElement *Element) error {
 	return nil
 }
 
+func (m *MatroskaFile) readSegmentCluster(options *MatroskaFileOptions, progressCallback func(int64, int64)) error {
+	//go to segment
+	newOffset, seekErr := m.File.Seek(m.SegmentElement.DataPosition, io.SeekStart)
+	if seekErr != nil {
+		return fmt.Errorf("failed to advance to segment cluster: %w", seekErr)
+	}
+
+	m.FilePosition = newOffset
+
+	for m.FilePosition < m.SegmentElement.EndPosition() {
+		beforeReadElementIdPosition := m.FilePosition
+		rawElementId, elementIdErr := m.readVariableLengthUInt(false)
+		if elementIdErr != nil {
+			return fmt.Errorf("failed to read segment cluster element: %w", elementIdErr)
+		}
+
+		elementId := ElementId(rawElementId)
+		if ElementId(elementId) == ElementNone && beforeReadElementIdPosition+1000 < m.FileSize {
+			//Error mode: search for start of next cluster, will be very slow
+			maxErrors := 5000000
+			errorCount := 0
+			max := m.FileSize
+
+			for elementId != ElementCluster && beforeReadElementIdPosition+1000 < max {
+				errorCount++
+				if errorCount > maxErrors {
+					//we give up
+					return errors.New("maximum error count reached while searching for segment cluster")
+				}
+
+				beforeReadElementIdPosition++
+				newOffset, seekErr = m.File.Seek(beforeReadElementIdPosition, io.SeekStart)
+				if seekErr != nil {
+					return fmt.Errorf("failed to advance while searching for segment cluster: %w", seekErr)
+				}
+
+				m.FilePosition = newOffset
+
+				rawElementId, elementIdErr = m.readVariableLengthUInt(false)
+				if elementIdErr != nil {
+					return fmt.Errorf("failed to read element while searching for segment cluster: %w", elementIdErr)
+				}
+
+				elementId = ElementId(rawElementId)
+			}
+		}
+
+		size, sizeErr := m.readVariableLengthUIntDefault()
+		if sizeErr != nil {
+			return fmt.Errorf("failed to read size for segment cluster: %w", sizeErr)
+		}
+
+		element := NewElement(elementId, m.FilePosition, int64(size))
+		if element.Id == ElementCluster {
+			m.readCluster(element, options)
+		} else {
+			newOffset, seekErr = m.File.Seek(element.DataSize, io.SeekCurrent)
+			if seekErr != nil {
+				return fmt.Errorf("failed to advance while reading segment cluster: %w", seekErr)
+			}
+
+			m.FilePosition = newOffset
+		}
+
+		progressCallback(element.EndPosition(), m.FileSize)
+	}
+
+	return nil
+}
+
 func (m *MatroskaFile) readSegmentInfoAndTracks() error {
-	// go to segment
+	//go to segment
 	newOffset, seekErr := m.File.Seek(m.SegmentElement.DataPosition, io.SeekStart)
 	if seekErr != nil {
 		return fmt.Errorf("failed to advance to segment element: %w", seekErr)
@@ -245,6 +426,101 @@ func (m *MatroskaFile) readString(length int) (string, error) {
 	m.offsetFilePosition(bytesRead)
 
 	return string(buffer), nil
+}
+
+func (m *MatroskaFile) readSubtitleBlock(blockElement *Element, clusterTimeCode int64, options *MatroskaFileOptions) (*MatroskaSubtitle, error) {
+	trackNumber, trackNumberErr := m.readVariableLengthUIntDefault()
+	if trackNumberErr != nil {
+		return nil, fmt.Errorf("failed to read subtitle track number: %w", trackNumberErr)
+	}
+
+	if options == nil || options.SubtitleTrack != trackNumber {
+		newOffset, seekErr := m.File.Seek(blockElement.EndPosition(), io.SeekStart)
+		if seekErr != nil {
+			return nil, fmt.Errorf("failed to advance to next element: %w", seekErr)
+		}
+
+		m.FilePosition = newOffset
+
+		return nil, nil
+	}
+
+	timeCode, timeCodeErr := m.readInt16()
+	if timeCodeErr != nil {
+		return nil, fmt.Errorf("failed to read subtitle time code: %w", timeCodeErr)
+	}
+
+	//lacing
+	buffer := make([]byte, 1)
+	bytesRead, readErr := m.File.Read(buffer)
+	if bytesRead == 0 || (readErr != nil && readErr != io.EOF) {
+		return nil, fmt.Errorf("failed to read flags for subtitle block: %w", readErr)
+	}
+
+	m.offsetFilePosition(bytesRead)
+
+	flags := buffer[0]
+
+	var frames int
+	switch flags & 6 {
+	//00000000 = No lacing
+	//case 0:
+	//fmt.Println("No lacing")
+	//00000010 = Xiph lacing
+	case 2:
+		bytesRead, readErr = m.File.Read(buffer)
+		if bytesRead == 0 || (readErr != nil && readErr != io.EOF) {
+			return nil, fmt.Errorf("failed to read frames for subtitle block: %w", readErr)
+		}
+
+		m.offsetFilePosition(bytesRead)
+
+		frames = int(buffer[0]) + 1
+	//00000100 = Fixed-size lacing
+	case 4:
+		bytesRead, readErr = m.File.Read(buffer)
+		if bytesRead == 0 || (readErr != nil && readErr != io.EOF) {
+			return nil, fmt.Errorf("failed to read frames for subtitle block: %w", readErr)
+		}
+
+		m.offsetFilePosition(bytesRead)
+
+		frames = int(buffer[0]) + 1
+
+		for i := 0; i < frames; i++ {
+			//frames
+			bytesRead, readErr = m.File.Read(buffer)
+			if bytesRead == 0 || (readErr != nil && readErr != io.EOF) {
+				return nil, fmt.Errorf("failed to read frames for subtitle block: %w", readErr)
+			}
+
+			m.offsetFilePosition(bytesRead)
+		}
+	//00000110 = EMBL lacing
+	case 6:
+		bytesRead, readErr = m.File.Read(buffer)
+		if bytesRead == 0 || (readErr != nil && readErr != io.EOF) {
+			return nil, fmt.Errorf("failed to read frames for subtitle block: %w", readErr)
+		}
+
+		m.offsetFilePosition(bytesRead)
+
+		frames = int(buffer[0]) + 1
+	}
+
+	//save subtitle data
+	dataLength := blockElement.EndPosition() - m.FilePosition
+	data := make([]byte, dataLength)
+	bytesRead, readErr = m.File.Read(data)
+	if bytesRead == 0 || (readErr != nil && readErr != io.EOF) {
+		return nil, fmt.Errorf("failed to read data for subtitle: %w", readErr)
+	}
+
+	m.offsetFilePosition(bytesRead)
+
+	subtitleStart := int64(math.Round(m.scaleTime64(float64(clusterTimeCode + int64(timeCode)))))
+
+	return NewMatroskaSubtitle(data, subtitleStart), nil
 }
 
 func (m *MatroskaFile) readTrackEntryElement(trackEntryElement *Element) (*MatroskaTrackInfo, error) {
