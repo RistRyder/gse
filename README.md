@@ -2,6 +2,12 @@
 
 Go port of the .NET `libse` library used by Subtitle Edit: <https://github.com/SubtitleEdit/subtitleedit/tree/main/src/libse>
 
+This library is pre-release under active development and attempts to maintain the same API as `libse`.
+
+## Example
+Currently the track information of an MKV file is available and individual subtitle tracks can be read.
+
+The API for populating the tracks is currently internal but functional:
 ```go
 func main() {
 	file, err := NewMatroskaFile("/path/to/video/file.mkv")
