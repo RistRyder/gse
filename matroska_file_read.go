@@ -34,7 +34,7 @@ func (m *MatroskaFile) readBlockGroupElement(clusterElement *Element, clusterTim
 			}
 
 			if subtitle != nil {
-				m.MatroskaSubtitles = append(m.MatroskaSubtitles, subtitle)
+				m.subtitles = append(m.subtitles, subtitle)
 			}
 		case ElementBlockDuration:
 			duration, durationErr := m.readUInt(int(element.DataSize))
@@ -93,7 +93,7 @@ func (m *MatroskaFile) readCluster(clusterElement *Element, options *MatroskaFil
 			}
 
 			if subtitle != nil {
-				m.MatroskaSubtitles = append(m.MatroskaSubtitles, subtitle)
+				m.subtitles = append(m.subtitles, subtitle)
 			}
 		default:
 			newOffset, seekErr := m.File.Seek(element.DataSize, io.SeekCurrent)
@@ -654,7 +654,7 @@ func (m *MatroskaFile) readTrackEntryElement(trackEntryElement *Element) (*Matro
 }
 
 func (m *MatroskaFile) readTracksElement(tracksElement *Element) error {
-	m.Tracks = []*MatroskaTrackInfo{}
+	m.tracks = []*MatroskaTrackInfo{}
 
 	var element *Element = &Element{}
 	var elementErr error
@@ -671,7 +671,7 @@ func (m *MatroskaFile) readTracksElement(tracksElement *Element) error {
 				return fmt.Errorf("failed to read tracks entry element: %w", trackErr)
 			}
 
-			m.Tracks = append(m.Tracks, track)
+			m.tracks = append(m.tracks, track)
 		} else {
 			newOffset, seekErr := m.File.Seek(element.DataSize, io.SeekCurrent)
 			if seekErr != nil {

@@ -4,23 +4,25 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 )
 
 type MatroskaFile struct {
-	Duration          float64
-	File              *os.File
-	FilePosition      int64
-	FileSize          int64
-	FrameRate         float64
-	IsValid           bool
-	MatroskaSubtitles []*MatroskaSubtitle
-	Path              string
-	PixelHeight       int
-	PixelWidth        int
-	SegmentElement    *Element
-	TimeCodeScale     int64
-	Tracks            []*MatroskaTrackInfo
-	VideoCodecId      string
+	Duration       float64
+	File           *os.File
+	FilePosition   int64
+	FileSize       int64
+	FrameRate      float64
+	IsValid        bool
+	Path           string
+	PixelHeight    int
+	PixelWidth     int
+	SegmentElement *Element
+	TimeCodeScale  int64
+	VideoCodecId   string
+
+	subtitles []*MatroskaSubtitle
+	tracks    []*MatroskaTrackInfo
 }
 
 func (m *MatroskaFile) offsetFilePosition(offset int) {
@@ -97,7 +99,7 @@ func (m *MatroskaFile) String() string {
 }
 
 func (m *MatroskaFile) Subtitles(trackNumber uint64, progressCallback func(int64, int64)) ([]*MatroskaSubtitle, error) {
-	m.MatroskaSubtitles = nil
+	m.subtitles = nil
 
 	matroskaFileOptions := &MatroskaFileOptions{SubtitleTrack: trackNumber}
 
@@ -106,5 +108,30 @@ func (m *MatroskaFile) Subtitles(trackNumber uint64, progressCallback func(int64
 		return nil, fmt.Errorf("failed to read subtitles: %w", readSegmentClusterErr)
 	}
 
-	return m.MatroskaSubtitles, nil
+	return m.subtitles, nil
+}
+
+func (m *MatroskaFile) Tracks(subtitleOnly bool) ([]*MatroskaTrackInfo, error) {
+	segmentInfoAndTracksErr := m.readSegmentInfoAndTracks()
+	if segmentInfoAndTracksErr != nil {
+		return nil, fmt.Errorf("failed to read tracks: %w", segmentInfoAndTracksErr)
+	}
+
+	if m.tracks == nil {
+		return []*MatroskaTrackInfo{}, nil
+	}
+
+	if subtitleOnly {
+		return slices.Collect(func(yield func(*MatroskaTrackInfo) bool) {
+			for _, track := range m.tracks {
+				if track.IsSubtitle {
+					if !yield(track) {
+						return
+					}
+				}
+			}
+		}), nil
+	}
+
+	return m.tracks, nil
 }

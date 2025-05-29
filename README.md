@@ -4,35 +4,55 @@ Go port of the .NET `libse` library used by Subtitle Edit: <https://github.com/S
 
 This library is pre-release under active development and attempts to maintain the same API as `libse`.
 
-## Example
+## Example - Read Subtitle Track
 Currently the track information of an MKV file is available and individual subtitle tracks can be read.
-
-The API for populating the tracks is currently internal but functional:
 ```go
 func main() {
-	file, err := NewMatroskaFile("/path/to/video/file.mkv")
-	if err != nil {
-		fmt.Println("Error opening file: ", err)
+	matroskaFile, matroskaFileErr := NewMatroskaFile("/path/to/video/file.mkv")
+	if matroskaFileErr != nil {
+		fmt.Println("Error opening Matroska file: ", matroskaFileErr)
 
 		return
 	}
 
-	defer file.Close()
+	defer matroskaFile.Close()
 
-	trackNumber := uint64(4)
+	if !matroskaFile.IsValid {
+		fmt.Println("Matroska file is not valid.")
 
-	subtitles, subtitlesErr := file.Subtitles(trackNumber, progressCallback)
+		return
+	}
+
+	subtitleTracks, subtitleTracksErr := matroskaFile.Tracks(true)
+	if subtitleTracksErr != nil {
+		fmt.Println("Error retrieving tracks: ", subtitleTracksErr)
+
+		return
+	}
+
+	for i, track := range subtitleTracks {
+		fmt.Printf("Track %d: %v\n", i, track)
+	}
+
+	//Arbitrarily select subtitle track
+	subtitleTrackNumber := uint64(4)
+
+	subtitles, subtitlesErr := matroskaFile.Subtitles(subtitleTrackNumber, progressCallback)
 	if subtitlesErr != nil {
-		fmt.Println("Subtitle Error: ", subtitlesErr)
-	} else {
-		for i, line := range subtitles {
-			text, textErr := line.Text(file.Tracks[trackNumber])
+		fmt.Println("Error retrieving subtitle: ", subtitlesErr)
 
-			if textErr != nil {
-				fmt.Println("Error: ", textErr)
-			} else {
-				fmt.Printf("[%v][%v - %v] --> %v\n", i, line.Start, line.End(), text)
-			}
+		return
+	}
+
+	subtitleTrack := subtitleTracks[subtitleTrackNumber]
+
+	for i, line := range subtitles {
+		text, textErr := line.Text(subtitleTrack)
+
+		if textErr != nil {
+			fmt.Println("Error reading subtitle line: ", textErr)
+		} else {
+			fmt.Printf("[%v][%v - %v] --> %v\n", i, line.Start, line.End(), text)
 		}
 	}
 }
