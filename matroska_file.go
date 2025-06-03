@@ -5,13 +5,12 @@ import (
 	"io"
 	"os"
 	"slices"
+
+	"github.com/cockroachdb/errors"
 )
 
 type MatroskaFile struct {
 	Duration       float64
-	File           *os.File
-	FilePosition   int64
-	FileSize       int64
 	FrameRate      float64
 	IsValid        bool
 	Path           string
@@ -21,12 +20,16 @@ type MatroskaFile struct {
 	TimeCodeScale  int64
 	VideoCodecId   string
 
-	subtitles []*MatroskaSubtitle
-	tracks    []*MatroskaTrackInfo
+	file         *os.File
+	filePosition int64
+	fileSize     int64
+	isOpen       bool
+	subtitles    []*MatroskaSubtitle
+	tracks       []*MatroskaTrackInfo
 }
 
 func (m *MatroskaFile) offsetFilePosition(offset int) {
-	m.FilePosition += int64(offset)
+	m.filePosition += int64(offset)
 }
 
 func (m *MatroskaFile) scaleTime32(time float32) float64 {
@@ -38,16 +41,35 @@ func (m *MatroskaFile) scaleTime64(time float64) float64 {
 }
 
 func (m *MatroskaFile) Close() error {
-	return m.File.Close()
+	if !m.isOpen {
+		return nil
+	}
+
+	m.Duration = -1
+	m.FrameRate = -1
+	m.filePosition = -1
+	m.fileSize = -1
+	m.isOpen = false
+	m.IsValid = false
+	m.Path = ""
+	m.PixelHeight = 0
+	m.PixelWidth = 0
+	m.SegmentElement = nil
+	m.subtitles = nil
+	m.TimeCodeScale = -1
+	m.tracks = nil
+	m.VideoCodecId = ""
+
+	return m.file.Close()
 }
 
 func NewMatroskaFile(path string) (*MatroskaFile, error) {
 	file, openErr := os.Open(path)
 	if openErr != nil {
-		return nil, fmt.Errorf("failed to open Matroska file %s: %w", path, openErr)
+		return nil, errors.Wrapf(openErr, "failed to open Matroska file %s", path)
 	}
 
-	matroskaFile := &MatroskaFile{File: file, FilePosition: 0, IsValid: false, Path: path}
+	matroskaFile := &MatroskaFile{file: file, filePosition: 0, isOpen: true, IsValid: false, Path: path}
 
 	headerElement, headerErr := matroskaFile.readElement()
 	if headerErr != nil {
@@ -57,20 +79,20 @@ func NewMatroskaFile(path string) (*MatroskaFile, error) {
 	}
 
 	if headerElement != nil && headerElement.Id == ElementEbml {
-		newOffset, seekErr := matroskaFile.File.Seek(headerElement.DataSize, io.SeekCurrent)
+		newOffset, seekErr := matroskaFile.file.Seek(headerElement.DataSize, io.SeekCurrent)
 		if seekErr != nil {
 			defer matroskaFile.Close()
 
-			return nil, fmt.Errorf("failed to read Matroska file %s: %w", path, seekErr)
+			return nil, errors.Wrapf(seekErr, "failed to seek while opening Matroska file %s", path)
 		}
 
-		matroskaFile.FilePosition = newOffset
+		matroskaFile.filePosition = newOffset
 
 		segmentElement, segmentErr := matroskaFile.readElement()
 		if segmentErr != nil {
 			defer matroskaFile.Close()
 
-			return nil, segmentErr
+			return nil, errors.Wrapf(segmentErr, "failed to read segment element while opening Matroska file %s", path)
 		}
 
 		if segmentElement != nil && segmentElement.Id == ElementSegment {
@@ -78,10 +100,10 @@ func NewMatroskaFile(path string) (*MatroskaFile, error) {
 			if statErr != nil {
 				defer matroskaFile.Close()
 
-				return nil, fmt.Errorf("failed to get Matroska file info: %w", statErr)
+				return nil, errors.Wrapf(statErr, "failed to read information while opening Matroska file %s", path)
 			}
 
-			matroskaFile.FileSize = stat.Size()
+			matroskaFile.fileSize = stat.Size()
 			matroskaFile.IsValid = true
 			matroskaFile.SegmentElement = segmentElement
 
@@ -91,7 +113,7 @@ func NewMatroskaFile(path string) (*MatroskaFile, error) {
 
 	defer matroskaFile.Close()
 
-	return nil, fmt.Errorf("failed to read header of Matroska file %s", path)
+	return nil, errors.Newf("failed to read header of Matroska file %s", path)
 }
 
 func (m *MatroskaFile) String() string {
@@ -105,7 +127,7 @@ func (m *MatroskaFile) Subtitles(trackNumber uint64, progressCallback func(int64
 
 	readSegmentClusterErr := m.readSegmentCluster(matroskaFileOptions, progressCallback)
 	if readSegmentClusterErr != nil {
-		return nil, fmt.Errorf("failed to read subtitles: %w", readSegmentClusterErr)
+		return nil, errors.Wrap(readSegmentClusterErr, "failed to read subtitles")
 	}
 
 	return m.subtitles, nil
@@ -114,7 +136,7 @@ func (m *MatroskaFile) Subtitles(trackNumber uint64, progressCallback func(int64
 func (m *MatroskaFile) Tracks(subtitleOnly bool) ([]*MatroskaTrackInfo, error) {
 	segmentInfoAndTracksErr := m.readSegmentInfoAndTracks()
 	if segmentInfoAndTracksErr != nil {
-		return nil, fmt.Errorf("failed to read tracks: %w", segmentInfoAndTracksErr)
+		return nil, errors.Wrap(segmentInfoAndTracksErr, "failed to read tracks")
 	}
 
 	if m.tracks == nil {

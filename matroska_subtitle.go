@@ -3,10 +3,10 @@ package gse
 import (
 	"bytes"
 	"compress/zlib"
-	"fmt"
 	"io"
 
 	"github.com/andybalholm/crlf"
+	"github.com/cockroachdb/errors"
 )
 
 type MatroskaSubtitle struct {
@@ -62,12 +62,12 @@ func (m *MatroskaSubtitle) UncompressedData(matroskaTrackInfo *MatroskaTrackInfo
 	buffer := bytes.NewBuffer(m.Data)
 	zlibReader, zlibReaderErr := zlib.NewReader(buffer)
 	if zlibReaderErr != nil {
-		return nil, fmt.Errorf("failed to create zlib reader: %w", zlibReaderErr)
+		return nil, errors.Wrap(zlibReaderErr, "failed to create zlib reader")
 	}
 
 	uncompressedData, uncompressedDataErr := io.ReadAll(zlibReader)
 	if uncompressedDataErr != nil {
-		return nil, fmt.Errorf("failed to read all data from zlib reader: %w", uncompressedDataErr)
+		return nil, errors.Wrap(uncompressedDataErr, "failed to read all data from zlib reader")
 	}
 
 	return uncompressedData, nil
