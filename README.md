@@ -10,7 +10,7 @@ Currently the track information of an MKV file is available and individual subti
 ### Container Formats
 | Container Format  | Example Location |
 | ------------- | ------------- |
-| Matroska | examples/containers/matroska/main.go |
+| Matroska | [examples/containers/matroska/main.go](https://github.com/RistRyder/gse/blob/main/examples/containers/matroska/main.go) |
 
 ## License
 `gse` is licensed under the GNU LESSER GENERAL PUBLIC LICENSE Version 3, 
