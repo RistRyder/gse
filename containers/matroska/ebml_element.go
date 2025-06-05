@@ -1,6 +1,9 @@
 package matroska
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 type Element struct {
 	DataPosition int64
@@ -9,6 +12,10 @@ type Element struct {
 }
 
 type ElementId uint32
+
+var EmptyElement Element = Element{Id: ElementId(math.MaxUint32)}
+
+var InvalidElement Element = Element{DataPosition: -1, DataSize: -1, Id: ElementId(math.MaxUint32)}
 
 const (
 	ElementNone ElementId = 0

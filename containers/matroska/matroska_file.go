@@ -24,8 +24,8 @@ type MatroskaFile struct {
 	filePosition int64
 	fileSize     int64
 	isOpen       bool
-	subtitles    []*MatroskaSubtitle
-	tracks       []*MatroskaTrackInfo
+	subtitles    []MatroskaSubtitle
+	tracks       []MatroskaTrackInfo
 }
 
 func (m *MatroskaFile) offsetFilePosition(offset int) {
@@ -78,7 +78,7 @@ func NewMatroskaFile(path string) (*MatroskaFile, error) {
 		return nil, headerErr
 	}
 
-	if headerElement != nil && headerElement.Id == ElementEbml {
+	if headerElement != InvalidElement && headerElement.Id == ElementEbml {
 		newOffset, seekErr := matroskaFile.file.Seek(headerElement.DataSize, io.SeekCurrent)
 		if seekErr != nil {
 			defer matroskaFile.Close()
@@ -95,7 +95,7 @@ func NewMatroskaFile(path string) (*MatroskaFile, error) {
 			return nil, errors.Wrapf(segmentErr, "failed to read segment element while opening Matroska file %s", path)
 		}
 
-		if segmentElement != nil && segmentElement.Id == ElementSegment {
+		if segmentElement != InvalidElement && segmentElement.Id == ElementSegment {
 			stat, statErr := file.Stat()
 			if statErr != nil {
 				defer matroskaFile.Close()
@@ -105,7 +105,7 @@ func NewMatroskaFile(path string) (*MatroskaFile, error) {
 
 			matroskaFile.fileSize = stat.Size()
 			matroskaFile.IsValid = true
-			matroskaFile.SegmentElement = segmentElement
+			matroskaFile.SegmentElement = &segmentElement
 
 			return matroskaFile, nil
 		}
@@ -120,10 +120,10 @@ func (m *MatroskaFile) String() string {
 	return fmt.Sprintf("Duration: %v , FrameRate: %v", m.Duration, m.FrameRate)
 }
 
-func (m *MatroskaFile) Subtitles(trackNumber uint64, progressCallback func(int64, int64)) ([]*MatroskaSubtitle, error) {
+func (m *MatroskaFile) Subtitle(trackNumber uint64, progressCallback func(int64, int64)) ([]MatroskaSubtitle, error) {
 	m.subtitles = nil
 
-	matroskaFileOptions := &MatroskaFileOptions{SubtitleTrack: trackNumber}
+	matroskaFileOptions := MatroskaFileOptions{SubtitleTrack: trackNumber}
 
 	readSegmentClusterErr := m.readSegmentCluster(matroskaFileOptions, progressCallback)
 	if readSegmentClusterErr != nil {
@@ -133,18 +133,18 @@ func (m *MatroskaFile) Subtitles(trackNumber uint64, progressCallback func(int64
 	return m.subtitles, nil
 }
 
-func (m *MatroskaFile) Tracks(subtitleOnly bool) ([]*MatroskaTrackInfo, error) {
+func (m *MatroskaFile) Tracks(subtitleOnly bool) ([]MatroskaTrackInfo, error) {
 	segmentInfoAndTracksErr := m.readSegmentInfoAndTracks()
 	if segmentInfoAndTracksErr != nil {
 		return nil, errors.Wrap(segmentInfoAndTracksErr, "failed to read tracks")
 	}
 
 	if m.tracks == nil {
-		return []*MatroskaTrackInfo{}, nil
+		return []MatroskaTrackInfo{}, nil
 	}
 
 	if subtitleOnly {
-		return slices.Collect(func(yield func(*MatroskaTrackInfo) bool) {
+		return slices.Collect(func(yield func(MatroskaTrackInfo) bool) {
 			for _, track := range m.tracks {
 				if track.IsSubtitle {
 					if !yield(track) {

@@ -23,7 +23,7 @@ func NewMatroskaSubtitle(data []byte, start int64) *MatroskaSubtitle {
 	return &MatroskaSubtitle{Data: data, Start: start}
 }
 
-func (m *MatroskaSubtitle) Text(matroskaTrackInfo *MatroskaTrackInfo) (string, error) {
+func (m *MatroskaSubtitle) Text(matroskaTrackInfo MatroskaTrackInfo) (string, error) {
 	uncompressedData, uncompressedDataErr := m.UncompressedData(matroskaTrackInfo)
 	if uncompressedDataErr != nil {
 		return "", uncompressedDataErr
@@ -54,7 +54,7 @@ func (m *MatroskaSubtitle) Text(matroskaTrackInfo *MatroskaTrackInfo) (string, e
 	return text, nil
 }
 
-func (m *MatroskaSubtitle) UncompressedData(matroskaTrackInfo *MatroskaTrackInfo) ([]byte, error) {
+func (m *MatroskaSubtitle) UncompressedData(matroskaTrackInfo MatroskaTrackInfo) ([]byte, error) {
 	if matroskaTrackInfo.ContentEncodingType != ContentEncodingTypeCompression || (matroskaTrackInfo.ContentEncodingScope&ContentEncodingScopeTracks) == 0 {
 		return m.Data, nil
 	}

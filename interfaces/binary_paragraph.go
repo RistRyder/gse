@@ -3,6 +3,6 @@ package interfaces
 import "image/draw"
 
 type BinaryParagraph interface {
-	GetBitmap() draw.Image
+	GetBitmap() *draw.Image
 	IsForced() bool
 }

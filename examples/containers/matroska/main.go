@@ -44,7 +44,8 @@ func readPlainTextSubtitle() {
 	//Arbitrarily select subtitle track
 	subtitleTrackNumber := uint64(4)
 
-	subtitles, subtitlesErr := matroskaFile.Subtitles(subtitleTrackNumber, progressCallback)
+	//Progress callback is optional
+	subtitles, subtitlesErr := matroskaFile.Subtitle(subtitleTrackNumber, progressCallback)
 	if subtitlesErr != nil {
 		fmt.Println("Error retrieving subtitle: ", subtitlesErr)
 
