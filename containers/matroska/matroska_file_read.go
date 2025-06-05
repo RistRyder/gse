@@ -108,7 +108,7 @@ func (m *MatroskaFile) readCluster(clusterElement Element, options MatroskaFileO
 }
 
 func (m *MatroskaFile) readContentEncodingElement(contentEncodingElement Element) (int, int, uint, error) {
-	contentCompressionAlgorithm, contentEncodingType, contentEncodingScope := 0, 0, uint(0)
+	contentCompressionAlgorithm, contentEncodingType, contentEncodingScope := 0, 0, uint(1)
 	element := EmptyElement
 	var elementErr error
 
@@ -142,7 +142,7 @@ func (m *MatroskaFile) readContentEncodingElement(contentEncodingElement Element
 			compressionElement := EmptyElement
 			var compressionElementErr error
 
-			for m.filePosition < element.EndPosition() && element != InvalidElement {
+			for m.filePosition < element.EndPosition() && compressionElement != InvalidElement {
 				compressionElement, compressionElementErr = m.readElement()
 				if compressionElementErr != nil {
 					return 0, 0, 0, errors.Wrap(elementErr, "failed to read content compression element")
