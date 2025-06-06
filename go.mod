@@ -5,6 +5,7 @@ go 1.24.1
 require (
 	github.com/andybalholm/crlf v0.0.0-20171020200849-670099aa064f
 	github.com/cockroachdb/errors v1.12.0
+	github.com/edsrzf/mmap-go v1.2.0
 	golang.org/x/sys v0.33.0
 )
 

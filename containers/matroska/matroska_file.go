@@ -3,9 +3,9 @@ package matroska
 import (
 	"fmt"
 	"io"
-	"os"
 	"slices"
 
+	"github.com/RistRyder/gse/common"
 	"github.com/cockroachdb/errors"
 )
 
@@ -20,16 +20,10 @@ type MatroskaFile struct {
 	TimeCodeScale  int64
 	VideoCodecId   string
 
-	file         *os.File
-	filePosition int64
-	fileSize     int64
-	isOpen       bool
-	subtitles    []MatroskaSubtitle
-	tracks       []MatroskaTrackInfo
-}
-
-func (m *MatroskaFile) offsetFilePosition(offset int) {
-	m.filePosition += int64(offset)
+	file      *common.FileStream
+	isOpen    bool
+	subtitles []MatroskaSubtitle
+	tracks    []MatroskaTrackInfo
 }
 
 func (m *MatroskaFile) scaleTime32(time float32) float64 {
@@ -47,8 +41,6 @@ func (m *MatroskaFile) Close() error {
 
 	m.Duration = -1
 	m.FrameRate = -1
-	m.filePosition = -1
-	m.fileSize = -1
 	m.isOpen = false
 	m.IsValid = false
 	m.Path = ""
@@ -64,54 +56,36 @@ func (m *MatroskaFile) Close() error {
 }
 
 func NewMatroskaFile(path string) (*MatroskaFile, error) {
-	file, openErr := os.Open(path)
+	file, openErr := common.NewFileStream(path)
 	if openErr != nil {
 		return nil, errors.Wrapf(openErr, "failed to open Matroska file %s", path)
 	}
 
-	matroskaFile := &MatroskaFile{file: file, filePosition: 0, isOpen: true, IsValid: false, Path: path}
+	matroskaFile := &MatroskaFile{file: file, isOpen: true, IsValid: false, Path: path}
 
 	headerElement, headerErr := matroskaFile.readElement()
 	if headerErr != nil {
-		defer matroskaFile.Close()
-
 		return nil, headerErr
 	}
 
 	if headerElement != InvalidElement && headerElement.Id == ElementEbml {
-		newOffset, seekErr := matroskaFile.file.Seek(headerElement.DataSize, io.SeekCurrent)
+		_, seekErr := matroskaFile.file.Seek(headerElement.DataSize, io.SeekCurrent)
 		if seekErr != nil {
-			defer matroskaFile.Close()
-
 			return nil, errors.Wrapf(seekErr, "failed to seek while opening Matroska file %s", path)
 		}
 
-		matroskaFile.filePosition = newOffset
-
 		segmentElement, segmentErr := matroskaFile.readElement()
 		if segmentErr != nil {
-			defer matroskaFile.Close()
-
 			return nil, errors.Wrapf(segmentErr, "failed to read segment element while opening Matroska file %s", path)
 		}
 
 		if segmentElement != InvalidElement && segmentElement.Id == ElementSegment {
-			stat, statErr := file.Stat()
-			if statErr != nil {
-				defer matroskaFile.Close()
-
-				return nil, errors.Wrapf(statErr, "failed to read information while opening Matroska file %s", path)
-			}
-
-			matroskaFile.fileSize = stat.Size()
 			matroskaFile.IsValid = true
 			matroskaFile.SegmentElement = &segmentElement
 
 			return matroskaFile, nil
 		}
 	}
-
-	defer matroskaFile.Close()
 
 	return nil, errors.Newf("failed to read header of Matroska file %s", path)
 }
