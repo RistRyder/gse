@@ -1,3 +1,23 @@
+/*
+ * Copyright 2009 Volker Oth (0xdeadbeef)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * NOTE: Converted to C# and modified by Nikse.dk@gmail.com
+ * NOTE: For more info see http://blog.thescorpius.com/index.php/2017/07/15/presentation-graphic-stream-sup-files-bluray-subtitle-format/
+ * NOTE: Converted from C# to Go by github.com/RistRyder
+ */
+
 package bluraysup
 
 import (
@@ -381,7 +401,7 @@ func ParseBluRaySup(buffer []byte, bufferPos int, fromMatroskaFile bool, lastPal
 	})
 
 	for _, pcs := range pcsList {
-		for _, odsList := range pcs.BitmapObjects {
+		for i, odsList := range pcs.BitmapObjects {
 			if len(odsList) <= 1 {
 				continue
 			}
@@ -398,6 +418,8 @@ func ParseBluRaySup(buffer []byte, bufferPos int, fromMatroskaFile bool, lastPal
 			}
 			odsList[0].Fragment.ImageBuffer = buf
 			odsList[0].Fragment.ImagePacketSize = bufSize
+
+			pcs.BitmapObjects[i] = []OdsData{odsList[0]}
 
 			break
 		}
