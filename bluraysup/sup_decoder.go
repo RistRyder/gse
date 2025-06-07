@@ -19,13 +19,135 @@
 
 package bluraysup
 
-import "image/draw"
+import (
+	"image"
+	"image/color"
+)
 
 const AlphaCrop = 14
 
-func DecodeImage() *draw.Image {
-	//TODO: Do
-	return nil
+func putPixel(bmp *image.RGBA, index int, color color.RGBA) {
+	if color.A > 0 {
+		size := bmp.Rect.Size()
+		x := index % size.X
+		y := index / size.X
+		if x < size.X && y < size.Y {
+			bmp.Set(x, y, color)
+		}
+	}
+}
+
+func putPixelWithPalette(bmp *image.RGBA, index int, color int, palette BluRaySupPalette) {
+	size := bmp.Rect.Size()
+	x := index % size.X
+	y := index / size.X
+	if x < size.X && y < size.Y {
+		bmp.Set(x, y, palette.ArgbColor(color))
+	}
+}
+
+func DecodeImage(pcs PcsObject, data []OdsData, palettes []PaletteInfo) image.Image {
+	if len(data) < 1 {
+		return image.NewRGBA(image.Rect(0, 0, 1, 1))
+	}
+
+	w := data[0].Size.Width
+	h := data[0].Size.Height
+
+	if w <= 0 || h <= 0 || len(data[0].Fragment.ImageBuffer) < 1 {
+		return image.NewRGBA(image.Rect(0, 0, 1, 1))
+	}
+
+	bm := image.NewRGBA(image.Rect(0, 0, w, h))
+	pal := DecodePalette(palettes)
+
+	ofs := 0
+	xpos := 0
+	index := 0
+
+	buf := data[0].Fragment.ImageBuffer
+
+	for {
+		b := int(buf[index]) & 0xFF
+		index++
+		if b == 0 && index < len(buf) {
+			b = int(buf[index]) & 0xFF
+			index++
+			if b == 0 {
+				//next line
+				ofs = ofs / w * w
+				if xpos < w {
+					ofs += w
+				}
+
+				xpos = 0
+			} else {
+				size := 0
+				if (b & 0xC0) == 0x40 {
+					if index < len(buf) {
+						//00 4x xx -> xxx zeroes
+						size = ((b - 0x40) << 8) + (int(buf[index]) & 0xFF)
+						index++
+						c := pal.ArgbColor(0)
+						for i := 0; i < size; i++ {
+							putPixel(bm, ofs, c)
+							ofs++
+						}
+
+						xpos += size
+					}
+				} else if (b & 0xC0) == 0x80 {
+					if index < len(buf) {
+						//00 8x yy -> x times value y
+						size = b - 0x80
+						b = int(buf[index]) & 0xFF
+						index++
+						c := pal.ArgbColor(b)
+						for i := 0; i < size; i++ {
+							putPixel(bm, ofs, c)
+							ofs++
+						}
+
+						xpos += size
+					}
+				} else if (b & 0xC0) != 0 {
+					if index < len(buf) {
+						//00 cx yy zz -> xyy times value z
+						size = ((b - 0xC0) << 8) + (int(buf[index]) & 0xFF)
+						index++
+						b = int(buf[index]) & 0xFF
+						index++
+						c := pal.ArgbColor(b)
+						for i := 0; i < size; i++ {
+							putPixel(bm, ofs, c)
+							ofs++
+						}
+
+						xpos += size
+					}
+				} else {
+					//00 xx -> xx times 0
+					c := pal.ArgbColor(0)
+					for i := 0; i < b; i++ {
+						putPixel(bm, ofs, c)
+						ofs++
+					}
+
+					xpos += b
+				}
+			}
+		} else {
+			putPixelWithPalette(bm, ofs, b, pal)
+			ofs++
+			xpos++
+		}
+
+		if index >= len(buf) {
+			break
+		}
+	}
+
+	return bm
 }
 
 func DecodePalette(paletteInfos []PaletteInfo) BluRaySupPalette {
@@ -53,7 +175,6 @@ func DecodePalette(paletteInfos []PaletteInfo) BluRaySupPalette {
 		cb := p.Buffer[index]
 		index++
 		alpha := p.Buffer[index]
-		index++
 		alphaOld := palette.AlphaAtIndex(int(palIndex))
 
 		//avoid fading out

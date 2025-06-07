@@ -1,8 +1,8 @@
 package interfaces
 
-import "image/draw"
+import "image"
 
 type BinaryParagraph interface {
-	GetBitmap() *draw.Image
+	GetBitmap() image.Image
 	IsForced() bool
 }

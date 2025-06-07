@@ -22,6 +22,7 @@ package bluraysup
 
 import (
 	"fmt"
+	"image"
 	"slices"
 
 	"github.com/RistRyder/gse/common"
@@ -151,7 +152,7 @@ func parsePcs(buffer []byte, offset int) PcsObject {
 	//object_cropped_flag: 0x80, forced_on_flag = 0x040, 6bit reserved
 	forcedCropped := buffer[14+offset]
 	pcs.IsForced = (forcedCropped & 0x40) == 0x40
-	pcs.Origin = common.Point{X: int(BigEndianInt16(buffer, 15+offset)), Y: int(BigEndianInt16(buffer, 17+offset))}
+	pcs.Origin = image.Point{X: int(BigEndianInt16(buffer, 15+offset)), Y: int(BigEndianInt16(buffer, 17+offset))}
 
 	return pcs
 }

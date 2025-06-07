@@ -19,6 +19,8 @@
 
 package bluraysup
 
+import "image/color"
+
 type BluRaySupPalette struct {
 	size     int    //Number of palette entries
 	r        []byte //Byte buffer for RED info
@@ -73,6 +75,16 @@ func rgb2YCbCr(r, g, b int, useBt601 bool) []int {
 //AlphaAtIndex returns the alpha channel at the specified palette index
 func (b *BluRaySupPalette) AlphaAtIndex(index int) int {
 	return int(b.a[index] & 0xFF)
+}
+
+//ArgbColor returns the palette entry at index as a color.RGBA struct
+func (b *BluRaySupPalette) ArgbColor(index int) color.RGBA {
+	return color.RGBA{R: b.r[index], G: b.g[index], B: b.b[index], A: b.a[index]}
+}
+
+//ArgbInt returns the palette entry at index as an integer in ARGB format
+func (b *BluRaySupPalette) ArgbInt(index int) int32 {
+	return ((int32(b.a[index]) & 0xFF) << 24) | ((int32(b.r[index]) & 0xFF) << 16) | ((int32(b.g[index]) & 0xFF) << 8) | (int32(b.b[index]) & 0xFF)
 }
 
 //NewBluRaySupPalette initializes the palette with transparent black (RGBA: 0x00000000)

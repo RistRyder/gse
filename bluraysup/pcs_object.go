@@ -1,10 +1,10 @@
 package bluraysup
 
-import "github.com/RistRyder/gse/common"
+import "image"
 
 type PcsObject struct {
 	IsForced bool
 	ObjectId int
-	Origin   common.Point
+	Origin   image.Point
 	WindowId int
 }
