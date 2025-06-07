@@ -7,14 +7,6 @@ import (
 )
 
 func main() {
-	readPlainTextSubtitle()
-}
-
-func progressCallback(position int64, total int64) {
-	fmt.Printf("Position: %v / %v\n", position, total)
-}
-
-func readPlainTextSubtitle() {
 	matroskaFile, matroskaFileErr := matroska.NewMatroskaFile("/path/to/video/file.mkv")
 	if matroskaFileErr != nil {
 		fmt.Println("Error opening Matroska file: ", matroskaFileErr)
@@ -42,17 +34,23 @@ func readPlainTextSubtitle() {
 	}
 
 	//Arbitrarily select subtitle track
-	subtitleTrackNumber := uint64(4)
+	subtitleTrack := subtitleTracks[4]
 
+	readPlainTextSubtitle(matroskaFile, subtitleTrack)
+}
+
+func progressCallback(position int64, total int64) {
+	fmt.Printf("Position: %v / %v\n", position, total)
+}
+
+func readPlainTextSubtitle(matroskaFile *matroska.MatroskaFile, subtitleTrack matroska.MatroskaTrackInfo) {
 	//Progress callback is optional
-	subtitles, subtitlesErr := matroskaFile.Subtitle(subtitleTrackNumber, progressCallback)
+	subtitles, subtitlesErr := matroskaFile.Subtitle(uint64(subtitleTrack.TrackNumber), progressCallback)
 	if subtitlesErr != nil {
 		fmt.Println("Error retrieving subtitle: ", subtitlesErr)
 
 		return
 	}
-
-	subtitleTrack := subtitleTracks[subtitleTrackNumber]
 
 	for i, line := range subtitles {
 		text, textErr := line.Text(subtitleTrack)

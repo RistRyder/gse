@@ -4,13 +4,14 @@ Go port of the .NET `libse` library used by Subtitle Edit: <https://github.com/S
 
 This library is pre-release under active development and attempts to maintain the same API as `libse`.
 
-Currently the track information of an MKV file is available and individual subtitle tracks can be read.
+Currently the track information of an MKV file is available and individual subtitle tracks can be read, including BluRaySup.
 
 ## Examples
 ### Container Formats
-| Container Format  | Example Location |
-| ------------- | ------------- |
-| Matroska | [examples/containers/matroska/main.go](https://github.com/RistRyder/gse/blob/main/examples/containers/matroska/main.go) |
+| Container Format | Description | Location |
+| ------------- | ------------- | ------------- |
+| Matroska | Read BluRaySup subtitle track | [Here](https://github.com/RistRyder/gse/blob/main/examples/containers/matroska/bluraysup/main.go) |
+| Matroska | Read plain text subtitle track | [Here](https://github.com/RistRyder/gse/blob/main/examples/containers/matroska/text/main.go) |
 
 ## License
 `gse` is licensed under the GNU LESSER GENERAL PUBLIC LICENSE Version 3, 
