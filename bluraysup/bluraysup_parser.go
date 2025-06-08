@@ -24,10 +24,11 @@ import (
 	"fmt"
 	"image"
 	"slices"
+	"strings"
 
-	"github.com/RistRyder/gse/common"
-	"github.com/RistRyder/gse/containers/matroska"
 	"github.com/cockroachdb/errors"
+	"github.com/ristryder/gse/common"
+	"github.com/ristryder/gse/containers/matroska"
 )
 
 const headerSize = 13
@@ -178,6 +179,7 @@ func parsePicture(buffer []byte, segment supSegment) PcsData {
 		return PcsData{CompositionState: CompositionStateInvalid}
 	}
 
+	sb := strings.Builder{}
 	pcs := PcsData{
 		CompNum:             int(BigEndianInt16(buffer, 5)),
 		CompositionState:    getCompositionState(buffer[7]),
@@ -192,8 +194,10 @@ func parsePicture(buffer []byte, segment supSegment) PcsData {
 	//8bit  palette_id_ref
 	compositionObjectCount := buffer[10] //8bit  number_of_composition_objects (0..2)
 
+	_, _ = sb.WriteString(fmt.Sprintf("CompNum: %v, Pts: %v, State: %v, PalUpdate: %v, PalId: %v", pcs.CompNum, PtsToTimeString(pcs.StartTime), pcs.CompositionState, pcs.PaletteUpdate, pcs.PaletteId))
+
 	if pcs.CompositionState == CompositionStateInvalid {
-		//Illegal composition state Invalid
+		_, _ = sb.WriteString("\nIllegal composition state Invalid")
 	} else {
 		offset := 0
 		pcs.PcsObjects = []PcsObject{}
@@ -201,12 +205,14 @@ func parsePicture(buffer []byte, segment supSegment) PcsData {
 			pcsObj := parsePcs(buffer, offset)
 			pcs.PcsObjects = append(pcs.PcsObjects, pcsObj)
 
+			_, _ = sb.WriteString(fmt.Sprintf("\nObjId: %v, WinId: %v, Forced: %v, X: %v, Y: %v", pcsObj.ObjectId, pcsObj.WindowId, pcsObj.IsForced, pcsObj.Origin.X, pcsObj.Origin.Y))
+
 			offset += 8
 		}
 	}
 
-	//TODO: Populate 'Message' field
-	//pcs.Message = StringBuilder()
+	pcs.Message = sb.String()
+
 	return pcs
 }
 

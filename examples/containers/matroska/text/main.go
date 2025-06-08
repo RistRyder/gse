@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/RistRyder/gse/containers/matroska"
+	"github.com/ristryder/gse/containers/matroska"
 )
 
 func main() {

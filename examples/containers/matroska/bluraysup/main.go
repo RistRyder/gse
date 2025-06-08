@@ -6,8 +6,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/RistRyder/gse/bluraysup"
-	"github.com/RistRyder/gse/containers/matroska"
+	"github.com/ristryder/gse/bluraysup"
+	"github.com/ristryder/gse/containers/matroska"
 )
 
 func main() {

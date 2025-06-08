@@ -1,4 +1,4 @@
-module github.com/RistRyder/gse
+module github.com/ristryder/gse
 
 go 1.24.1
 

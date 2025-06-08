@@ -4,7 +4,7 @@ import (
 	"image"
 	"image/draw"
 
-	"github.com/RistRyder/gse/common"
+	"github.com/ristryder/gse/common"
 )
 
 type PcsData struct {
@@ -13,6 +13,7 @@ type PcsData struct {
 	CompositionState    CompositionState
 	EndTime             int64
 	FramesPerSecondType int
+	Message             string
 	PaletteId           int
 	PaletteInfos        []PaletteInfo
 	PaletteUpdate       bool

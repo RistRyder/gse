@@ -1,6 +1,6 @@
 package interfaces
 
-import "github.com/RistRyder/gse/common"
+import "github.com/ristryder/gse/common"
 
 type BinaryParagraphWithPosition interface {
 	BinaryParagraph

@@ -1,6 +1,6 @@
 package bluraysup
 
-import "github.com/RistRyder/gse/common"
+import "github.com/ristryder/gse/common"
 
 type OdsData struct {
 	Fragment      *ImageObjectFragment

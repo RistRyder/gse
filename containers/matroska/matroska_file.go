@@ -5,8 +5,8 @@ import (
 	"io"
 	"slices"
 
-	"github.com/RistRyder/gse/common"
 	"github.com/cockroachdb/errors"
+	"github.com/ristryder/gse/common"
 )
 
 type MatroskaFile struct {
