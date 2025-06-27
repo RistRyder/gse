@@ -47,5 +47,5 @@ func MillisecondsToTime(ms float64) [4]int64 {
 func PtsToTimeString(pts int64) string {
 	time := MillisecondsToTime(float64(pts) / 90)
 
-	return fmt.Sprintf("%2d:%2d:%2d:%3d", time[0], time[1], time[2], time[3])
+	return fmt.Sprintf("%2d:%2d:%2d.%3d", time[0], time[1], time[2], time[3])
 }
